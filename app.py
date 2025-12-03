@@ -22,7 +22,7 @@ st.set_page_config(
     layout="wide",
 )
 
-# Estilo Matplotlib tipo The Economist
+
 plt.rcParams.update({
     "font.family": "DejaVu Sans",  # Sans serif limpia
     "axes.labelsize": 9,
@@ -31,7 +31,7 @@ plt.rcParams.update({
     "ytick.labelsize": 8,
 })
 
-# Paleta tipo The Economist
+
 ECONOMIST_RED = "#E3120B"
 ECONOMIST_BLUE = "#006BA2"
 ECONOMIST_GREEN = "#28A197"
@@ -570,7 +570,6 @@ def generar_pdf(entidad, departamento, ts_total, df_area, df_2024, texto_resumen
 # ======================================
 
 st.title("Informe automático de ingresos municipales")
-st.caption("Estilo tipo The Economist · Ingresos 2021–2024")
 
 if not DATA_PATH.exists():
     st.error(f"No se encontró el archivo de datos en {DATA_PATH}.")
