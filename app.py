@@ -14,7 +14,6 @@ import streamlit as st
 # CONFIGURACIÓN GENERAL
 # ======================================
 
-# Ruta del archivo de datos
 DATA_PATH = Path("data/ingresos_municipios.csv")
 
 st.set_page_config(
@@ -22,7 +21,7 @@ st.set_page_config(
     layout="wide",
 )
 
-# Estilo tipo The Economist para Matplotlib (global)
+# Estilo Matplotlib tipo The Economist
 plt.rcParams.update({
     "font.family": "DejaVu Sans",  # Sans serif limpia
     "axes.labelsize": 9,
@@ -31,7 +30,7 @@ plt.rcParams.update({
     "ytick.labelsize": 8,
 })
 
-# Paleta inspirada en The Economist
+# Paleta tipo The Economist
 ECONOMIST_RED = "#E3120B"
 ECONOMIST_BLUE = "#006BA2"
 ECONOMIST_GREEN = "#28A197"
@@ -54,10 +53,7 @@ TEXT_COLOR = "#333333"
 # ======================================
 
 def apply_economist_style(ax):
-    """
-    Aplica un estilo visual inspirado en The Economist
-    a un objeto Axes de Matplotlib.
-    """
+    """Aplica estilo Economist a un Axes de Matplotlib."""
     ax.set_facecolor("white")
     if ax.figure is not None:
         ax.figure.set_facecolor("white")
@@ -80,7 +76,7 @@ def apply_economist_style(ax):
         length=4,
         width=0.8,
         colors=TEXT_COLOR,
-        axis="both"
+        axis="both",
     )
 
     # Etiquetas de ejes
@@ -94,9 +90,7 @@ def apply_economist_style(ax):
 
 
 def economist_plotly_layout(fig, colorway=None):
-    """
-    Aplica un layout tipo Economist a figuras de Plotly.
-    """
+    """Aplica layout tipo Economist a una figura de Plotly."""
     if colorway is None:
         colorway = [ECONOMIST_RED, ECONOMIST_BLUE, ECONOMIST_GREEN, ECONOMIST_YELLOW]
 
@@ -158,9 +152,7 @@ def load_data(path: Path) -> pd.DataFrame:
 
 @st.cache_data
 def calcular_crecimiento_promedio_municipios(df: pd.DataFrame):
-    """
-    Crecimiento promedio 2021-2024 del ingreso total para municipios.
-    """
+    """Crecimiento promedio 2021-2024 del ingreso total para municipios."""
     df_mun = df[df["tipo_norm"].str.contains("MUNICIPIO", na=False)].copy()
     if df_mun.empty:
         return None
@@ -354,17 +346,18 @@ def crear_graficos_plotly(ts_total, df_area, df_2024, entidad):
     fig_area = economist_plotly_layout(fig_area, colorway=ECONOMIST_PALETTE)
     fig_area.update_yaxes(title="% del total")
 
-    # Treemap 2024
+    # Treemap 2024 (sólo si suma > 0)
+    fig_tree = None
     if not df_2024.empty:
-        fig_tree = px.treemap(
-            df_2024,
-            path=["clas_gen", "clasificacion_ofpuj"],
-            values="TotalRecaudo",
-            title=f"Composición del ingreso 2024 (clas_gen / OFPUJ) - {entidad}",
-        )
-        fig_tree = economist_plotly_layout(fig_tree, colorway=ECONOMIST_PALETTE)
-    else:
-        fig_tree = None
+        total_2024 = df_2024["TotalRecaudo"].sum()
+        if total_2024 > 0:
+            fig_tree = px.treemap(
+                df_2024,
+                path=["clas_gen", "clasificacion_ofpuj"],
+                values="TotalRecaudo",
+                title=f"Composición del ingreso 2024 (clas_gen / OFPUJ) - {entidad}",
+            )
+            fig_tree = economist_plotly_layout(fig_tree, colorway=ECONOMIST_PALETTE)
 
     return fig_line, fig_area, fig_tree
 
@@ -426,12 +419,11 @@ def crear_imagenes_matplotlib(ts_total, df_area, df_2024, entidad, departamento)
         colors = [ECONOMIST_PALETTE[i % len(ECONOMIST_PALETTE)] for i in range(len(cols))]
 
         ax.stackplot(xs, ys, labels=cols, colors=colors)
-        ax.set_title(f"Composición relativa del ingreso (clas_gen)")
+        ax.set_title("Composición relativa del ingreso (clas_gen)")
         ax.set_xlabel("Año")
         ax.set_ylabel("% del total")
         ax.set_ylim(0, 100)
         apply_economist_style(ax)
-        # Leyenda arriba a la izquierda, pequeña
         ax.legend(loc="upper left", fontsize=6, frameon=False)
         fig.tight_layout()
         fig.savefig(tmp_area.name, bbox_inches="tight")
@@ -441,36 +433,40 @@ def crear_imagenes_matplotlib(ts_total, df_area, df_2024, entidad, departamento)
     else:
         temp_paths.append(None)
 
-    # 3) Treemap 2024
+    # 3) Treemap 2024 (sólo si suma > 0)
+    path_tree = None
     if (df_2024 is not None) and (not df_2024.empty):
-        tmp_tree = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
-        tmp_tree.close()
+        total_2024 = df_2024["TotalRecaudo"].sum()
+        if total_2024 > 0:
+            tmp_tree = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
+            tmp_tree.close()
 
-        df_t = df_2024.copy()
-        df_t["label"] = df_t["clas_gen"].astype(str) + "\n" + df_t["clasificacion_ofpuj"].astype(str)
+            df_t = df_2024.copy()
+            df_t["label"] = df_t["clas_gen"].astype(str) + "\n" + df_t["clasificacion_ofpuj"].astype(str)
 
-        sizes = df_t["TotalRecaudo"].values
-        labels = df_t["label"].values
-        colors = [ECONOMIST_PALETTE[i % len(ECONOMIST_PALETTE)] for i in range(len(labels))]
+            sizes = df_t["TotalRecaudo"].values
+            labels = df_t["label"].values
+            colors = [ECONOMIST_PALETTE[i % len(ECONOMIST_PALETTE)] for i in range(len(labels))]
 
-        fig, ax = plt.subplots(figsize=(7, 4), dpi=150)
-        squarify.plot(
-            sizes=sizes,
-            label=labels,
-            color=colors,
-            alpha=0.92,
-            ax=ax,
-            text_kwargs={"fontsize": 7, "color": "white"},
-        )
-        ax.set_title(f"Composición del ingreso 2024 (clas_gen / OFPUJ) - {entidad}")
-        ax.axis("off")
-        fig.tight_layout()
-        fig.savefig(tmp_tree.name, bbox_inches="tight")
-        plt.close(fig)
+            fig, ax = plt.subplots(figsize=(7, 4), dpi=150)
+            # squarify internamente divide por la suma de sizes: nos aseguramos que > 0
+            squarify.plot(
+                sizes=sizes,
+                label=labels,
+                color=colors,
+                alpha=0.92,
+                ax=ax,
+                text_kwargs={"fontsize": 7, "color": "white"},
+            )
+            ax.set_title(f"Composición del ingreso 2024 (clas_gen / OFPUJ) - {entidad}")
+            ax.axis("off")
+            fig.tight_layout()
+            fig.savefig(tmp_tree.name, bbox_inches="tight")
+            plt.close(fig)
 
-        temp_paths.append(tmp_tree.name)
-    else:
-        temp_paths.append(None)
+            path_tree = tmp_tree.name
+
+    temp_paths.append(path_tree)
 
     return temp_paths  # [line, area, treemap]
 
@@ -485,7 +481,7 @@ def generar_pdf(entidad, departamento, ts_total, df_area, df_2024, texto_resumen
     - Barra roja a la izquierda
     - Título
     - Texto resumen
-    - Tres gráficos (línea, área, treemap)
+    - Tres gráficos (línea, área, treemap si aplica)
     """
     img_paths = crear_imagenes_matplotlib(ts_total, df_area, df_2024, entidad, departamento)
     path_line, path_area, path_tree = img_paths
@@ -505,7 +501,7 @@ def generar_pdf(entidad, departamento, ts_total, df_area, df_2024, texto_resumen
     titulo = f"Informe de ingresos - {entidad} ({departamento})"
     pdf.cell(0, 10, titulo, ln=1)
 
-    # Subtítulo/fecha genérico
+    # Subtítulo
     pdf.set_font("Helvetica", "", 9)
     pdf.set_text_color(100, 100, 100)
     pdf.set_xy(10, 18)
@@ -581,7 +577,7 @@ if ent_sel:
     if ts_total.empty:
         st.warning("No se encontraron datos para este municipio.")
     else:
-        # Gráficos interactivos estilo Economist
+        # Gráficos interactivos
         fig_line, fig_area_plot, fig_tree = crear_graficos_plotly(ts_total, df_area, df_2024, ent_sel)
 
         st.subheader("Vista previa de los gráficos")
@@ -594,7 +590,7 @@ if ent_sel:
         if fig_tree is not None:
             st.plotly_chart(fig_tree, use_container_width=True)
         else:
-            st.info("No hay información suficiente para 2024; no se muestra treemap.")
+            st.info("No hay información suficiente (o suma igual a cero) para generar el treemap 2024.")
 
         # Cálculos para el texto
         crecimiento_muni = calcular_crecimiento_municipio(ts_total)
