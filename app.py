@@ -134,7 +134,7 @@ def economist_plotly_layout(fig, colorway=None):
 def load_data(path: Path) -> pd.DataFrame:
     df = pd.read_csv(path)
     df["Año"] = df["Año"].astype(int)
-    df["TotalRecaudo"] = pd.to_numeric(df["TotalRecaudo"], errors="coerce").fillna(0)
+    df["totalrecaudo24"] = pd.to_numeric(df["totalrecaudo24"], errors="coerce").fillna(0)
 
     df["tipo_norm"] = (
         df["Tipo de Entidad"]
@@ -152,8 +152,8 @@ def calcular_crecimiento_promedio_municipios(df: pd.DataFrame):
     if df_mun.empty:
         return None
 
-    g = df_mun.groupby(["codigo_alt", "Año"], as_index=False)["TotalRecaudo"].sum()
-    pvt = g.pivot(index="codigo_alt", columns="Año", values="TotalRecaudo")
+    g = df_mun.groupby(["codigo_alt", "Año"], as_index=False)["totalrecaudo24"].sum()
+    pvt = g.pivot(index="codigo_alt", columns="Año", values="totalrecaudo24")
 
     if 2021 not in pvt.columns or 2024 not in pvt.columns:
         return None
@@ -173,13 +173,13 @@ def obtener_series_municipio(df: pd.DataFrame, entidad: str, departamento: str):
     ].copy()
 
     ts_total = (
-        df_muni.groupby("Año", as_index=False)["TotalRecaudo"]
+        df_muni.groupby("Año", as_index=False)["totalrecaudo24"]
         .sum()
         .sort_values("Año")
     )
 
     df_area = (
-        df_muni.groupby(["Año", "clas_gen"], as_index=False)["TotalRecaudo"]
+        df_muni.groupby(["Año", "clas_gen"], as_index=False)["totalrecaudo24"]
         .sum()
         .sort_values(["Año", "clas_gen"])
     )
@@ -187,7 +187,7 @@ def obtener_series_municipio(df: pd.DataFrame, entidad: str, departamento: str):
     df_2024 = df_muni[df_muni["Año"] == 2024].copy()
     if not df_2024.empty:
         df_2024 = (
-            df_2024.groupby(["clas_gen", "clasificacion_ofpuj"], as_index=False)["TotalRecaudo"]
+            df_2024.groupby(["clas_gen", "clasificacion_ofpuj"], as_index=False)["totalrecaudo24"]
             .sum()
         )
 
@@ -199,8 +199,8 @@ def calcular_crecimiento_municipio(ts_total: pd.DataFrame):
         return None
 
     try:
-        base_2021 = float(ts_total.loc[ts_total["Año"] == 2021, "TotalRecaudo"].iloc[0])
-        fin_2024 = float(ts_total.loc[ts_total["Año"] == 2024, "TotalRecaudo"].iloc[0])
+        base_2021 = float(ts_total.loc[ts_total["Año"] == 2021, "totalrecaudo24"].iloc[0])
+        fin_2024 = float(ts_total.loc[ts_total["Año"] == 2024, "totalrecaudo24"].iloc[0])
     except IndexError:
         return None
 
@@ -215,7 +215,7 @@ def composicion_por_clas_gen(df_muni: pd.DataFrame, year: int):
     if df_year.empty:
         return {}
 
-    comp = df_year.groupby("clas_gen")["TotalRecaudo"].sum()
+    comp = df_year.groupby("clas_gen")["totalrecaudo24"].sum()
     total = comp.sum()
     if total <= 0:
         return {}
@@ -227,12 +227,12 @@ def top3_fuentes_ofpuj(df_2024: pd.DataFrame):
     if df_2024.empty:
         return []
 
-    total = df_2024["TotalRecaudo"].sum()
+    total = df_2024["totalrecaudo24"].sum()
     if total <= 0:
         return []
 
     comp = (
-        df_2024.groupby("clasificacion_ofpuj")["TotalRecaudo"]
+        df_2024.groupby("clasificacion_ofpuj")["totalrecaudo24"]
         .sum()
         .sort_values(ascending=False)
     )
@@ -322,7 +322,7 @@ def crear_graficos_plotly(ts_total, df_area, df_2024, entidad):
     fig_line = px.line(
         ts_total,
         x="Año",
-        y="TotalRecaudo",
+        y="totalrecaudo24",
         markers=True,
         title=f"Ingreso total {entidad} (2021-2024)",
     )
@@ -333,7 +333,7 @@ def crear_graficos_plotly(ts_total, df_area, df_2024, entidad):
     fig_area = px.area(
         df_area,
         x="Año",
-        y="TotalRecaudo",
+        y="totalrecaudo24",
         color="clas_gen",
         groupnorm="percent",
         title=f"Composición relativa del ingreso por tipo (clas_gen) - {entidad}",
@@ -344,12 +344,12 @@ def crear_graficos_plotly(ts_total, df_area, df_2024, entidad):
     # Treemap 2024 (sólo si suma > 0)
     fig_tree = None
     if not df_2024.empty:
-        total_2024 = df_2024["TotalRecaudo"].sum()
+        total_2024 = df_2024["totalrecaudo24"].sum()
         if total_2024 > 0:
             fig_tree = px.treemap(
                 df_2024,
                 path=["clas_gen", "clasificacion_ofpuj"],
-                values="TotalRecaudo",
+                values="totalrecaudo24",
                 title=f"Composición del ingreso 2024 (clas_gen / OFPUJ) - {entidad}",
             )
             fig_tree = economist_plotly_layout(fig_tree, colorway=ECONOMIST_PALETTE)
@@ -379,7 +379,7 @@ def crear_imagenes_matplotlib(ts_total, df_area, df_2024, entidad, departamento)
         fig, ax = plt.subplots(figsize=(6, 4), dpi=150)
         ax.plot(
             ts_total["Año"],
-            ts_total["TotalRecaudo"],
+            ts_total["totalrecaudo24"],
             marker="o",
             linewidth=2,
             color=ECONOMIST_RED,
@@ -398,7 +398,7 @@ def crear_imagenes_matplotlib(ts_total, df_area, df_2024, entidad, departamento)
 
     # 2) Área relativa clas_gen
     if not df_area.empty:
-        pvt = df_area.pivot(index="Año", columns="clas_gen", values="TotalRecaudo").fillna(0)
+        pvt = df_area.pivot(index="Año", columns="clas_gen", values="totalrecaudo24").fillna(0)
         totals = pvt.sum(axis=1)
         totals[totals == 0] = np.nan
         pvt_pct = pvt.div(totals, axis=0) * 100
@@ -431,9 +431,9 @@ def crear_imagenes_matplotlib(ts_total, df_area, df_2024, entidad, departamento)
     # 3) Treemap 2024 (sólo si suma > 0 y todas las celdas tienen >0)
     path_tree = None
     if (df_2024 is not None) and (not df_2024.empty):
-        df_t = df_2024[df_2024["TotalRecaudo"] > 0].copy()
+        df_t = df_2024[df_2024["totalrecaudo24"] > 0].copy()
         if not df_t.empty:
-            sizes = df_t["TotalRecaudo"].to_numpy(dtype=float)
+            sizes = df_t["totalrecaudo24"].to_numpy(dtype=float)
             total_sizes = sizes.sum()
             if total_sizes > 0:
                 tmp_tree = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
