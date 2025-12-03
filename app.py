@@ -371,7 +371,7 @@ def crear_imagenes_matplotlib(ts_total, df_area, df_2024, entidad, departamento)
     Crea 3 imágenes PNG con estilo Economist usando Matplotlib:
     1) Línea de ingreso total
     2) Área relativa por clas_gen
-    3) Treemap composicional 2024
+    3) Treemap composicional 2024 (si es posible)
     Devuelve [path_line, path_area, path_tree]
     """
     temp_paths = []
@@ -433,38 +433,50 @@ def crear_imagenes_matplotlib(ts_total, df_area, df_2024, entidad, departamento)
     else:
         temp_paths.append(None)
 
-    # 3) Treemap 2024 (sólo si suma > 0)
+    # 3) Treemap 2024 (sólo si suma > 0 y todas las celdas tienen >0)
     path_tree = None
     if (df_2024 is not None) and (not df_2024.empty):
-        total_2024 = df_2024["TotalRecaudo"].sum()
-        if total_2024 > 0:
-            tmp_tree = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
-            tmp_tree.close()
+        # Filtrar filas con TotalRecaudo > 0
+        df_t = df_2024[df_2024["TotalRecaudo"] > 0].copy()
+        if not df_t.empty:
+            sizes = df_t["TotalRecaudo"].to_numpy(dtype=float)
+            total_sizes = sizes.sum()
+            if total_sizes > 0:
+                tmp_tree = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
+                tmp_tree.close()
 
-            df_t = df_2024.copy()
-            df_t["label"] = df_t["clas_gen"].astype(str) + "\n" + df_t["clasificacion_ofpuj"].astype(str)
+                df_t["label"] = (
+                    df_t["clas_gen"].astype(str)
+                    + "\n"
+                    + df_t["clasificacion_ofpuj"].astype(str)
+                )
 
-            sizes = df_t["TotalRecaudo"].values
-            labels = df_t["label"].values
-            colors = [ECONOMIST_PALETTE[i % len(ECONOMIST_PALETTE)] for i in range(len(labels))]
+                labels = df_t["label"].values
+                colors = [
+                    ECONOMIST_PALETTE[i % len(ECONOMIST_PALETTE)]
+                    for i in range(len(labels))
+                ]
 
-            fig, ax = plt.subplots(figsize=(7, 4), dpi=150)
-            # squarify internamente divide por la suma de sizes: nos aseguramos que > 0
-            squarify.plot(
-                sizes=sizes,
-                label=labels,
-                color=colors,
-                alpha=0.92,
-                ax=ax,
-                text_kwargs={"fontsize": 7, "color": "white"},
-            )
-            ax.set_title(f"Composición del ingreso 2024 (clas_gen / OFPUJ) - {entidad}")
-            ax.axis("off")
-            fig.tight_layout()
-            fig.savefig(tmp_tree.name, bbox_inches="tight")
-            plt.close(fig)
-
-            path_tree = tmp_tree.name
+                fig, ax = plt.subplots(figsize=(7, 4), dpi=150)
+                try:
+                    squarify.plot(
+                        sizes=sizes,
+                        label=labels,
+                        color=colors,
+                        alpha=0.92,
+                        ax=ax,
+                        text_kwargs={"fontsize": 7, "color": "white"},
+                    )
+                    ax.set_title(f"Composición del ingreso 2024 (clas_gen / OFPUJ) - {entidad}")
+                    ax.axis("off")
+                    fig.tight_layout()
+                    fig.savefig(tmp_tree.name, bbox_inches="tight")
+                    path_tree = tmp_tree.name
+                except ZeroDivisionError:
+                    # Si squarify explota por algún caso raro geométrico, no generamos treemap
+                    path_tree = None
+                finally:
+                    plt.close(fig)
 
     temp_paths.append(path_tree)
 
@@ -590,7 +602,7 @@ if ent_sel:
         if fig_tree is not None:
             st.plotly_chart(fig_tree, use_container_width=True)
         else:
-            st.info("No hay información suficiente (o suma igual a cero) para generar el treemap 2024.")
+            st.info("No hay información suficiente (o suma/fuentes iguales a cero) para generar el treemap 2024.")
 
         # Cálculos para el texto
         crecimiento_muni = calcular_crecimiento_municipio(ts_total)
