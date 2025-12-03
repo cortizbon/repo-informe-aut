@@ -2,12 +2,13 @@ import os
 import tempfile
 
 from pathlib import Path
+import matplotlib.pyplot as plt
+import squarify
 
 import numpy as np
 import pandas as pd
 import plotly.express as px
 from fpdf import FPDF
-import kaleido
 
 import streamlit as st
 
@@ -130,6 +131,89 @@ def calcular_crecimiento_municipio(ts_total: pd.DataFrame):
         return None
 
     return (fin_2024 / base_2021 - 1) * 100
+
+def crear_imagenes_matplotlib(ts_total, df_area, df_2024, entidad, departamento):
+    """
+    Genera tres imágenes PNG (línea, área relativa y treemap) usando Matplotlib.
+    Devuelve una lista con las rutas de los archivos: [path_line, path_area, path_tree].
+    """
+    temp_paths = []
+
+    # 1) Gráfico de línea: ingreso total
+    if not ts_total.empty:
+        tmp_line = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
+        tmp_line.close()
+
+        fig, ax = plt.subplots(figsize=(6, 4), dpi=150)
+        ax.plot(ts_total["Año"], ts_total["TotalRecaudo"], marker="o")
+        ax.set_title(f"Ingreso total {entidad} ({departamento})")
+        ax.set_xlabel("Año")
+        ax.set_ylabel("Total recaudo")
+        ax.grid(True, axis="y", alpha=0.3)
+        fig.tight_layout()
+        fig.savefig(tmp_line.name, bbox_inches="tight")
+        plt.close(fig)
+
+        temp_paths.append(tmp_line.name)
+    else:
+        temp_paths.append(None)
+
+    # 2) Gráfico de área relativa: clas_gen
+    if not df_area.empty:
+        # Pivot a años x clas_gen
+        pvt = df_area.pivot(index="Año", columns="clas_gen", values="TotalRecaudo").fillna(0)
+        # Normalizamos a % por fila
+        totals = pvt.sum(axis=1)
+        totals[totals == 0] = np.nan
+        pvt_pct = pvt.div(totals, axis=0) * 100
+
+        tmp_area = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
+        tmp_area.close()
+
+        fig, ax = plt.subplots(figsize=(6, 4), dpi=150)
+        cols = list(pvt_pct.columns)
+        xs = pvt_pct.index.values
+        ys = [pvt_pct[col].fillna(0.0).values for col in cols]
+
+        ax.stackplot(xs, ys, labels=cols)
+        ax.set_title(f"Composición relativa del ingreso por tipo (clas_gen) - {entidad}")
+        ax.set_xlabel("Año")
+        ax.set_ylabel("% del total")
+        ax.set_ylim(0, 100)
+        ax.legend(loc="upper left", fontsize=6)
+        ax.grid(True, axis="y", alpha=0.2)
+        fig.tight_layout()
+        fig.savefig(tmp_area.name, bbox_inches="tight")
+        plt.close(fig)
+
+        temp_paths.append(tmp_area.name)
+    else:
+        temp_paths.append(None)
+
+    # 3) Treemap 2024: clas_gen / clasificacion_ofpuj
+    if (df_2024 is not None) and (not df_2024.empty):
+        tmp_tree = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
+        tmp_tree.close()
+
+        df_t = df_2024.copy()
+        df_t["label"] = df_t["clas_gen"].astype(str) + "\n" + df_t["clasificacion_ofpuj"].astype(str)
+
+        sizes = df_t["TotalRecaudo"].values
+        labels = df_t["label"].values
+
+        fig, ax = plt.subplots(figsize=(7, 4), dpi=150)
+        squarify.plot(sizes=sizes, label=labels, ax=ax, alpha=0.9)
+        ax.set_title(f"Composición del ingreso 2024 (clas_gen / OFPUJ) - {entidad}")
+        ax.axis("off")
+        fig.tight_layout()
+        fig.savefig(tmp_tree.name, bbox_inches="tight")
+        plt.close(fig)
+
+        temp_paths.append(tmp_tree.name)
+    else:
+        temp_paths.append(None)
+
+    return temp_paths  # [line, area, treemap]
 
 
 def composicion_por_clas_gen(df_muni: pd.DataFrame, year: int):
@@ -296,25 +380,15 @@ def crear_graficos(ts_total, df_area, df_2024, entidad):
     return fig_line, fig_area, fig_tree
 
 
-def generar_pdf(entidad, departamento, fig_line, fig_area, fig_tree, texto_resumen):
+def generar_pdf(entidad, departamento, ts_total, df_area, df_2024, texto_resumen):
     """
     Genera un PDF de una página en orientación horizontal (A4),
-    con título, texto y tres gráficos (línea, área y treemap).
-    Devuelve bytes del PDF.
+    con título, texto y tres gráficos (línea, área y treemap) usando
+    imágenes creadas con Matplotlib. Devuelve bytes del PDF.
     """
-    import plotly.io as pio
-
-    # Guardamos figuras como imágenes temporales
-    tmp_files = []
-    figs = [fig_line, fig_area, fig_tree]
-    for f in figs:
-        if f is None:
-            tmp_files.append(None)
-            continue
-        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
-        tmp.close()
-        pio.write_image(f, tmp.name, width=1200, height=800, scale=2)
-        tmp_files.append(tmp.name)
+    # Creamos las imágenes temporales
+    img_paths = crear_imagenes_matplotlib(ts_total, df_area, df_2024, entidad, departamento)
+    path_line, path_area, path_tree = img_paths
 
     pdf = FPDF(orientation="L", unit="mm", format="A4")
     pdf.set_auto_page_break(auto=False, margin=10)
@@ -325,7 +399,7 @@ def generar_pdf(entidad, departamento, fig_line, fig_area, fig_tree, texto_resum
     titulo = f"Informe de ingresos - {entidad} ({departamento})"
     pdf.cell(0, 10, titulo, ln=1)
 
-    # Texto resumen (lo intentamos mantener compacto)
+    # Texto resumen
     pdf.set_font("Helvetica", size=9)
     for linea in texto_resumen.split("\n"):
         if not linea.strip():
@@ -334,29 +408,32 @@ def generar_pdf(entidad, departamento, fig_line, fig_area, fig_tree, texto_resum
             pdf.multi_cell(0, 4, linea)
 
     # Posición para los gráficos
-    # Ajusta estos valores si ves que se montan en tu PDF
     y_top_plots = 70
     img_w = 130
     img_h = 70
 
-    if tmp_files[0] is not None:
-        pdf.image(tmp_files[0], x=10, y=y_top_plots, w=img_w, h=img_h)
-    if tmp_files[1] is not None:
-        pdf.image(tmp_files[1], x=150, y=y_top_plots, w=img_w, h=img_h)
+    # Línea
+    if path_line is not None:
+        pdf.image(path_line, x=10, y=y_top_plots, w=img_w, h=img_h)
 
-    # Treemap en la parte inferior central
-    if tmp_files[2] is not None:
-        pdf.image(tmp_files[2], x=60, y=145, w=170)
+    # Área
+    if path_area is not None:
+        pdf.image(path_area, x=150, y=y_top_plots, w=img_w, h=img_h)
 
-    # Generar bytes
+    # Treemap
+    if path_tree is not None:
+        pdf.image(path_tree, x=60, y=145, w=170)
+
+    # Exportar a bytes
     pdf_bytes = pdf.output(dest="S").encode("latin-1")
 
-    # Limpiamos archivos temporales
-    for f in tmp_files:
-        if f is not None and os.path.exists(f):
-            os.remove(f)
+    # Limpiar temporales
+    for p in img_paths:
+        if p is not None and os.path.exists(p):
+            os.remove(p)
 
     return pdf_bytes
+
 
 
 # -----------------------------
@@ -432,9 +509,9 @@ if ent_sel:
             pdf_bytes = generar_pdf(
                 entidad=ent_sel,
                 departamento=dep_sel,
-                fig_line=fig_line,
-                fig_area=fig_area_plot,
-                fig_tree=fig_tree,
+                ts_total=ts_total,
+                df_area=df_area,
+                df_2024=df_2024,
                 texto_resumen=texto_resumen,
             )
 
@@ -444,3 +521,4 @@ if ent_sel:
                 file_name=f"informe_ingresos_{ent_sel.replace(' ', '_')}.pdf",
                 mime="application/pdf",
             )
+

@@ -1,4 +1,5 @@
 pandas
 plotly
-kaleido
+matplotlib
+squarify
 fpdf2
