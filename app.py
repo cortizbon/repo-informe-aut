@@ -277,13 +277,13 @@ def construir_texto_resumen(
     # 2) Composición
     if comp_2021:
         comp2021_str = "; ".join(f"{k}: {v:.1f}%" for k, v in comp_2021.items())
-        linea_2021 = f"- En 2021, la estructura del ingreso por tipo (clas_gen) era: {comp2021_str}."
+        linea_2021 = f"- En 2021, la estructura del ingreso era: {comp2021_str}."
     else:
         linea_2021 = "- No hay información suficiente para describir la composición del ingreso en 2021."
 
     if comp_2024:
         comp2024_str = "; ".join(f"{k}: {v:.1f}%" for k, v in comp_2024.items())
-        linea_2024 = f"- En 2024, la estructura del ingreso por tipo (clas_gen) es: {comp2024_str}."
+        linea_2024 = f"- En 2024, la estructura del ingreso es: {comp2024_str}."
     else:
         linea_2024 = "- No hay información suficiente para describir la composición del ingreso en 2024."
 
@@ -303,11 +303,11 @@ def construir_texto_resumen(
     texto.append("1) Crecimiento del ingreso total (2021-2024):")
     texto.extend(lineas1)
     texto.append("")
-    texto.append("2) Composición del ingreso en 2021 y 2024 (clas_gen):")
+    texto.append("2) Composición del ingreso en 2021 y 2024:")
     texto.append(linea_2021)
     texto.append(linea_2024)
     texto.append("")
-    texto.append("3) Desempeño en 2024: principales fuentes de ingreso (clasificación OFPUJ):")
+    texto.append("3) Desempeño en 2024: principales fuentes de ingreso:")
     texto.extend(lineas3)
 
     return "\n".join(texto)
@@ -336,7 +336,7 @@ def crear_graficos_plotly(ts_total, df_area, df_2024, entidad):
         y="totalrecaudo24",
         color="clas_gen",
         groupnorm="percent",
-        title=f"Composición relativa del ingreso por tipo (clas_gen) - {entidad}",
+        title=f"Composición relativa del ingreso por tipo - {entidad}",
     )
     fig_area = economist_plotly_layout(fig_area, colorway=ECONOMIST_PALETTE)
     fig_area.update_yaxes(title="% del total")
@@ -348,9 +348,9 @@ def crear_graficos_plotly(ts_total, df_area, df_2024, entidad):
         if total_2024 > 0:
             fig_tree = px.treemap(
                 df_2024,
-                path=["clas_gen", "clasificacion_ofpuj"],
+                path=[px.Constant("Ingresos totales"), "clas_gen", "clasificacion_ofpuj"],
                 values="totalrecaudo24",
-                title=f"Composición del ingreso 2024 (clas_gen / OFPUJ) - {entidad}",
+                title=f"Composición del ingreso 2024 - {entidad}",
             )
             fig_tree = economist_plotly_layout(fig_tree, colorway=ECONOMIST_PALETTE)
 
@@ -414,7 +414,7 @@ def crear_imagenes_matplotlib(ts_total, df_area, df_2024, entidad, departamento)
         colors = [ECONOMIST_PALETTE[i % len(ECONOMIST_PALETTE)] for i in range(len(cols))]
 
         ax.stackplot(xs, ys, labels=cols, colors=colors)
-        ax.set_title("Composición relativa del ingreso (clas_gen)")
+        ax.set_title("Composición relativa del ingreso")
         ax.set_xlabel("Año")
         ax.set_ylabel("% del total")
         ax.set_ylim(0, 100)
@@ -461,7 +461,7 @@ def crear_imagenes_matplotlib(ts_total, df_area, df_2024, entidad, departamento)
                         ax=ax,
                         text_kwargs={"fontsize": 7, "color": "white"},
                     )
-                    ax.set_title(f"Composición del ingreso 2024 (clas_gen / OFPUJ) - {entidad}")
+                    ax.set_title(f"Composición del ingreso 2024 - {entidad}")
                     ax.axis("off")
                     fig.tight_layout()
                     fig.savefig(tmp_tree.name, bbox_inches="tight")
