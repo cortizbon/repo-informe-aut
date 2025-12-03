@@ -633,21 +633,3 @@ if ent_sel:
         st.subheader("Resumen estándar del municipio")
         st.text(texto_resumen)
 
-        st.markdown("---")
-        if st.button("Generar informe en PDF"):
-            pdf_bytes = generar_pdf(
-                entidad=ent_sel,
-                departamento=dep_sel,
-                ts_total=ts_total,
-                df_area=df_area,
-                df_2024=df_2024,
-                texto_resumen=texto_resumen,
-            )
-
-            st.download_button(
-                label="Descargar informe en PDF",
-                data=pdf_bytes,
-                file_name=f"informe_ingresos_{ent_sel.replace(' ', '_')}.pdf",
-                mime="application/pdf",
-            )
-
