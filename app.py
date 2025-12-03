@@ -1,13 +1,14 @@
 import os
 import tempfile
 from pathlib import Path
+from textwrap import wrap
 
 import numpy as np
 import pandas as pd
 import plotly.express as px
 import matplotlib.pyplot as plt
 import squarify
-from fpdf import FPDF
+from fpdf import FPDF, FPDFException
 import streamlit as st
 
 # ======================================
@@ -58,19 +59,15 @@ def apply_economist_style(ax):
     if ax.figure is not None:
         ax.figure.set_facecolor("white")
 
-    # Quitar spines superior y derecho
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
 
-    # Colores de spines
     ax.spines["left"].set_color(TEXT_COLOR)
     ax.spines["bottom"].set_color(TEXT_COLOR)
 
-    # Grid suave sólo en Y
     ax.grid(True, axis="y", color=GRID_COLOR, linewidth=0.6, alpha=0.7)
     ax.grid(False, axis="x")
 
-    # Ticks hacia afuera
     ax.tick_params(
         direction="out",
         length=4,
@@ -79,11 +76,9 @@ def apply_economist_style(ax):
         axis="both",
     )
 
-    # Etiquetas de ejes
     for label in ax.get_xticklabels() + ax.get_yticklabels():
         label.set_color(TEXT_COLOR)
 
-    # Título más marcado
     ax.title.set_fontsize(11)
     ax.title.set_weight("bold")
     ax.title.set_color(TEXT_COLOR)
@@ -436,7 +431,6 @@ def crear_imagenes_matplotlib(ts_total, df_area, df_2024, entidad, departamento)
     # 3) Treemap 2024 (sólo si suma > 0 y todas las celdas tienen >0)
     path_tree = None
     if (df_2024 is not None) and (not df_2024.empty):
-        # Filtrar filas con TotalRecaudo > 0
         df_t = df_2024[df_2024["TotalRecaudo"] > 0].copy()
         if not df_t.empty:
             sizes = df_t["TotalRecaudo"].to_numpy(dtype=float)
@@ -473,7 +467,6 @@ def crear_imagenes_matplotlib(ts_total, df_area, df_2024, entidad, departamento)
                     fig.savefig(tmp_tree.name, bbox_inches="tight")
                     path_tree = tmp_tree.name
                 except ZeroDivisionError:
-                    # Si squarify explota por algún caso raro geométrico, no generamos treemap
                     path_tree = None
                 finally:
                     plt.close(fig)
@@ -499,6 +492,8 @@ def generar_pdf(entidad, departamento, ts_total, df_area, df_2024, texto_resumen
     path_line, path_area, path_tree = img_paths
 
     pdf = FPDF(orientation="L", unit="mm", format="A4")
+    pdf.set_left_margin(10)
+    pdf.set_right_margin(10)
     pdf.set_auto_page_break(auto=False, margin=10)
     pdf.add_page()
 
@@ -524,11 +519,27 @@ def generar_pdf(entidad, departamento, ts_total, df_area, df_2024, texto_resumen
     pdf.set_font("Helvetica", "", 9)
     pdf.set_text_color(40, 40, 40)
 
-    for linea in texto_resumen.split("\n"):
-        if not linea.strip():
+    max_chars = 110  # ancho máximo en caracteres por línea
+
+    for raw_line in texto_resumen.split("\n"):
+        if not raw_line.strip():
             pdf.ln(2)
-        else:
-            pdf.multi_cell(0, 4, linea)
+            continue
+
+        # dividir línea larga en trozos manejables
+        wrapped_lines = wrap(raw_line, width=max_chars)
+        if not wrapped_lines:
+            wrapped_lines = [""]
+
+        for linea in wrapped_lines:
+            # asegurar encoding latino básico
+            safe_line = linea.encode("latin-1", "replace").decode("latin-1")
+            try:
+                pdf.multi_cell(0, 4, safe_line)
+            except FPDFException:
+                # si aún así se queja, recortamos un poco más
+                shorter = safe_line[:80]
+                pdf.multi_cell(0, 4, shorter)
 
     # Posición para gráficos
     y_top_plots = 80
@@ -640,3 +651,4 @@ if ent_sel:
                 file_name=f"informe_ingresos_{ent_sel.replace(' ', '_')}.pdf",
                 mime="application/pdf",
             )
+
